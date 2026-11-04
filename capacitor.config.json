@@ -1,0 +1,6 @@
+{
+  "appId": "com.handtracking.android",
+  "appName": "Hand Tracking App",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}
