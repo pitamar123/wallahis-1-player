@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Android Hand Tracker</title>
+    <style>
+        body { margin: 0; background: #111; color: #fff; font-family: sans-serif; text-align: center; overflow: hidden; }
+        video { display: none; }
+        canvas { width: 100vw; height: 100vh; object-fit: cover; transform: scaleX(-1); display: block; }
+        .status { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 10; font-size: 16px; padding: 10px 20px; background: rgba(0,0,0,0.8); border-radius: 8px; }
+    </style>
+    <!-- MediaPipe Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+</head>
+<body>
+    <div class="status" id="status-text">Requesting Camera Access...</div>
+    <video id="webcam" autoplay playsinline></video>
+    <canvas id="output_canvas"></canvas>
+
+    <script>
+        const videoElement = document.getElementById('webcam');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const statusText = document.getElementById('status-text');
+
+        let actionCooldown = false;
+
+        function isPieceSign(landmarks) {
+            const indexUp = landmarks[8].y < landmarks[6].y;
+            const middleUp = landmarks[12].y < landmarks[10].y;
+            const ringDown = landmarks[16].y > landmarks[14].y;
+            const pinkyDown = landmarks[20].y > landmarks[18].y;
+            return indexUp && middleUp && ringDown && pinkyDown;
+        }
+
+        function onResults(results) {
+            canvasElement.width = window.innerWidth;
+            canvasElement.height = window.innerHeight;
+
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            let pieceDetected = false;
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                for (let i = 0; i < results.multiHandLandmarks.length; i++) {
+                    const landmarks = results.multiHandLandmarks[i];
+                    drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 4});
+                    drawLandmarks(canvasCtx, landmarks, {color: '#FF0000', lineWidth: 2, radius: 4});
+
+                    if (isPieceSign(landmarks)) {
+                        pieceDetected = true;
+                    }
+                }
+            }
+
+            if (pieceDetected) {
+                statusText.innerText = "Piece Sign Detected!";
+                if (!actionCooldown) {
+                    // Trigger mobile action or intent here
+                    console.log("Gesture matched!");
+                    actionCooldown = true;
+                    setTimeout(() => { actionCooldown = false; }, 4000);
+                }
+            } else {
+                statusText.innerText = "Show a Piece Sign (2 Fingers)";
+            }
+
+            canvasCtx.restore();
+        }
+
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 2,
+            modelComplexity: 0, // Optimized for smooth mobile performance
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(onResults);
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({ image: videoElement });
+            },
+            width: 640,
+            height: 480
+        });
+        camera.start().then(() => {
+            statusText.innerText = "Camera Active - Tracking Hands";
+        }).catch(err => {
+            statusText.innerText = "Camera Error: " + err.message;
+        });
+    </script>
+</body>
+</html>
